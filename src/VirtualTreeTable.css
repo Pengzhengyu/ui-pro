@@ -1,0 +1,149 @@
+/* VirtualTreeTable.css */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: -apple-system, sans-serif;
+  background: #f5f5f5;
+}
+
+/* 拖拽时给 body 添加，防止选中文本 */
+body.is-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.v-table-container {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  outline: none;
+}
+.v-table-container.bordered {
+  border: 1px solid #f0f0f0;
+}
+.v-table-wrapper {
+  overflow: auto;
+  height: 100%;
+  position: relative;
+}
+
+/* 表头 */
+.v-table-header {
+  display: flex;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  width: max-content; /* 允许横向滚动 */
+}
+.v-table-header-cell {
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  border-right: 1px solid #f0f0f0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* 列宽拖拽热区 */
+.v-table-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  transition: background 0.2s;
+}
+.v-table-resizer:hover,
+.v-table-resizer.active {
+  background: #1890ff;
+}
+
+/* 数据行 */
+.v-table-content {
+  width: max-content;
+}
+.v-table-row {
+  display: flex;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  width: 100%;
+}
+.v-table-row.hovered {
+  background: #fafafa;
+}
+.v-table-cell {
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #f0f0f0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+  cursor: cell; /* 提示可选中 */
+}
+
+/* 单元格文本溢出省略 */
+.v-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+/* 单元格选中高亮 */
+.v-table-cell.selected {
+  background-color: #e6f7ff;
+  z-index: 2;
+}
+
+/* 原生 Checkbox 和 树形图标保持不变... */
+.v-native-checkbox {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  background-color: #fff;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.v-native-checkbox.checked {
+  background-color: #1890ff;
+  border-color: #1890ff;
+}
+.v-native-checkbox.checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+.v-tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  transition: 0.3s;
+}
+.v-tree-icon.expanded {
+  transform: rotate(90deg);
+}
