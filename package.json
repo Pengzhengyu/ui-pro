@@ -1,12 +1,29 @@
 {
-  "name": "virtual-table-demo",
+  "name": "virtual-tree-table-vanilla",
   "version": "1.0.0",
-  "main": "main.js",
+  "description": "A high-performance virtual scrolling tree table in vanilla JavaScript with Excel-like copy & paste support.",
+  "main": "src/VirtualTreeTable.js",
+  "module": "src/VirtualTreeTable.js",
+  "style": "src/VirtualTreeTable.css",
+  "files": [
+    "src/VirtualTreeTable.js",
+    "src/VirtualTreeTable.css",
+    "README.md"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "serve ."
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  "keywords": [
+    "virtual",
+    "tree",
+    "table",
+    "vanilla-js",
+    "excel-copy-paste"
+  ],
+  "author": "Antigravity AI",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
 }
