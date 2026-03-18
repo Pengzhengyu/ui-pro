@@ -1,14 +1,16 @@
 {
-  "name": "virtual-tree-table-vanilla",
-  "version": "1.0.0",
-  "description": "A high-performance virtual scrolling tree table in vanilla JavaScript with Excel-like copy & paste support.",
-  "main": "src/VirtualTreeTable.js",
-  "module": "src/VirtualTreeTable.js",
-  "style": "src/VirtualTreeTable.css",
+  "name": "@antigravity/ui-pro",
+  "version": "0.1.0",
+  "description": "Antigravity UI Pro: A high-performance, futuristic React component library featuring virtualized tree tables and advanced interactive elements.",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "style": "src/commons/VirtualTreeTable/VirtualTreeTable.css",
+  "author": "Antigravity Team",
+  "license": "MIT",
   "files": [
-    "src/VirtualTreeTable.js",
-    "src/VirtualTreeTable.css",
-    "README.md"
+    "src",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "start": "webpack serve --mode development",
@@ -31,6 +33,3 @@
     "html-webpack-plugin": "^5.5.3"
   }
 }
-
-
-
