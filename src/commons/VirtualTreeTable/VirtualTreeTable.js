@@ -1,486 +1,293 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import './VirtualTreeTable.css';
 
-/**
- * High-performance Virtual Tree Table with Excel-like selection and copy-paste.
- * Version: React Hooks (React 17+)
- */
+const flattenData = (list, expandedKeys, rowKey, childrenKey) => {
+  const arr = [];
+  const traverse = (nodes, level) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      arr.push({ record: node, level });
+      if (
+        expandedKeys.has(node[rowKey]) &&
+        node[childrenKey] &&
+        node[childrenKey].length > 0
+      ) {
+        traverse(node[childrenKey], level + 1);
+      }
+    }
+  };
+  traverse(list, 0);
+  return arr;
+};
+
 const VirtualTreeTable = ({
+  columns: initialColumns = [],
   dataSource = [],
-  columns = [],
   rowKey = 'id',
-  childrenKey = 'children',
   height = 500,
-  width = "100%",
-  headerHeight = 40,
-  rowHeight = 40,
+  headerHeight = 45,
+  rowHeight = 45,
+  childrenKey = 'children',
   bordered = true,
+  rowClassName,
   iconIndex = 0,
   enableCellSelection = true,
   onCellSelectionChange = () => {},
-  onPaste = () => {},
+  children
 }) => {
-  // --- States ---
-  const [expandedKeys, setExpandedKeys] = useState(new Set());
   const [scrollTop, setScrollTop] = useState(0);
-  const [hoveredKey, setHoveredKey] = useState(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState(new Set());
+  const [expandedKeys, setExpandedKeys] = useState(new Set());
   const [selectedCellKeys, setSelectedCellKeys] = useState(new Set());
-  const [columnWidths, setColumnWidths] = useState(() => {
-    const initialWidths = {};
-    columns.forEach((col, idx) => {
-      initialWidths[idx] = col.width || 120;
-    });
-    return initialWidths;
-  });
-  
-  const [isCellDragging, setIsCellDragging] = useState(false);
-  const [dragStartCell, setDragStartCell] = useState(null);
+  const [dragStart, setDragStart] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoveredKey, setHoveredKey] = useState(null);
+  const [columnWidths, setColumnWidths] = useState({});
 
-  // --- Refs ---
-  const bodyRef = useRef(null);
   const containerRef = useRef(null);
+  const bodyRef = useRef(null);
 
-  // --- Data Processing (Flattening) ---
-  const { flatData, totalHeight, parentMap } = useMemo(() => {
-    const results = [];
-    const pMap = new Map();
+  const columns = useMemo(() => {
+    return (initialColumns || []).map((col, idx) => ({
+      ...col,
+      width: columnWidths[idx] || col.width || 150
+    }));
+  }, [initialColumns, columnWidths]);
 
-    const flatten = (data, level = 0, parentId = null) => {
-      data.forEach(item => {
-        const id = item[rowKey].toString();
-        if (parentId) pMap.set(id, parentId);
-        
-        results.push({ record: item, level });
-        if (expandedKeys.has(id) && item[childrenKey] && item[childrenKey].length > 0) {
-          flatten(item[childrenKey], level + 1, id);
-        }
-      });
-    };
-
-    flatten(dataSource);
-
-    return {
-      flatData: results,
-      totalHeight: results.length * rowHeight,
-      parentMap: pMap
-    };
+  // --- Virtualization Engine ---
+  const { flatData, rowPositions, totalHeight } = useMemo(() => {
+    const flattened = flattenData(dataSource, expandedKeys, rowKey, childrenKey);
+    let currentTop = 0;
+    const positions = flattened.map((node, index) => {
+      const h = typeof rowHeight === 'function' ? rowHeight(node.record, index) : rowHeight;
+      const pos = { top: currentTop, height: h };
+      currentTop += h;
+      return pos;
+    });
+    return { flatData: flattened, rowPositions: positions, totalHeight: currentTop };
   }, [dataSource, expandedKeys, rowKey, childrenKey, rowHeight]);
 
-  // --- Helpers ---
-  const isCellInSelection = useCallback((rKey, dataIndex) => {
-    let currentKey = rKey.toString();
-    while (currentKey) {
-      if (selectedCellKeys.has(`${currentKey}_${dataIndex}`)) return true;
-      currentKey = parentMap.get(currentKey);
-    }
-    return false;
-  }, [selectedCellKeys, parentMap]);
+  // --- Selection Helpers ---
+  const getCellKey = (record, col) => `${record[rowKey]}_${col.dataIndex || col.key}`;
+  const isCellInSelection = (rKey, dIndex) => selectedCellKeys.has(`${rKey}_${dIndex}`);
 
-  // --- Event Handlers ---
-  const onScroll = (e) => {
-    setScrollTop(e.target.scrollTop);
-    // Sync horizontal scroll to header
-    const headerRow = containerRef.current.querySelector('.v-table-header');
-    if (headerRow) {
-      headerRow.scrollLeft = e.target.scrollLeft;
-    }
-  };
-
-  const handleExpand = (e, rKey) => {
+  // --- Handlers ---
+  const handleExpand = (e, key) => {
     e.stopPropagation();
-    const newExpanded = new Set(expandedKeys);
-    if (newExpanded.has(rKey)) newExpanded.delete(rKey);
-    else newExpanded.add(rKey);
-    setExpandedKeys(newExpanded);
+    const next = new Set(expandedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setExpandedKeys(next);
   };
 
-  const handleSelectRow = (e, rKey) => {
-    e.stopPropagation();
-    const isCurrentlySelected = selectedRowKeys.has(rKey);
-    const nextState = !isCurrentlySelected;
-    const newSelectedRows = new Set(selectedRowKeys);
-
-    const traverseAndSelect = (nodes, shouldSelect) => {
-      nodes.forEach(item => {
-        const key = item[rowKey].toString();
-        if (shouldSelect) newSelectedRows.add(key);
-        else newSelectedRows.delete(key);
-        if (item[childrenKey]) traverseAndSelect(item[childrenKey], shouldSelect);
-      });
-    };
-
-    const findAndProcess = (data) => {
-      for (const item of data) {
-        if (item[rowKey].toString() === rKey) {
-          if (nextState) newSelectedRows.add(rKey);
-          else newSelectedRows.delete(rKey);
-          if (item[childrenKey]) traverseAndSelect(item[childrenKey], nextState);
-          return true;
-        }
-        if (item[childrenKey] && findAndProcess(item[childrenKey])) return true;
-      }
-      return false;
-    };
-
-    findAndProcess(dataSource);
-    setSelectedRowKeys(newSelectedRows);
-  };
-
-  const handleSelectAll = () => {
-    const totalKeys = [];
-    const flatAll = (nodes) => {
-      nodes.forEach(n => {
-        totalKeys.push(n[rowKey].toString());
-        if (n[childrenKey]) flatAll(n[childrenKey]);
-      });
-    };
-    flatAll(dataSource);
-    
-    const isFullySelected = totalKeys.every(k => selectedRowKeys.has(k));
-    if (isFullySelected) {
-      setSelectedRowKeys(new Set());
-    } else {
-      setSelectedRowKeys(new Set(totalKeys));
-    }
-  };
-
-  const handleResizerMouseDown = (e, colIdx) => {
-    e.preventDefault();
-    const startX = e.pageX;
-    const startWidth = columnWidths[colIdx];
-    
-    const onMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.pageX - startX;
-      setColumnWidths(prev => ({
-        ...prev,
-        [colIdx]: Math.max(50, startWidth + deltaX)
-      }));
-    };
-    
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = '';
-    };
-    
-    document.body.style.cursor = 'col-resize';
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  };
-
-  const handleMouseDown = (e) => {
-    if (e.target.closest('.v-tree-icon') || e.target.closest('.v-native-checkbox') || e.target.closest('.v-resizer')) return;
+  const handleCellMouseDown = (e, record, col, rowIndex, colIdx) => {
     if (!enableCellSelection) return;
+    if (e.target.closest('.v-tree-icon') || e.button !== 0) return;
 
-    // Prevent text selection
     e.preventDefault();
-
-    const bodyRect = bodyRef.current.getBoundingClientRect();
-    const x = e.clientX - bodyRect.left + bodyRef.current.scrollLeft;
-    const y = e.clientY - bodyRect.top + bodyRef.current.scrollTop;
-
-    const rowIndex = Math.floor(y / rowHeight);
+    const key = getCellKey(record, col);
     
-    // Find column index with clamping
-    let currentX = 50; 
-    let colIndex = -1;
-    for (let i = 0; i < columns.length; i++) {
-        const w = columnWidths[i] || 120;
-        if (x >= currentX && x < currentX + w) {
-            colIndex = i;
-            break;
-        }
-        currentX += w;
+    let nextSelection;
+    if (e.ctrlKey || e.metaKey) {
+        nextSelection = new Set(selectedCellKeys);
+        if (nextSelection.has(key)) nextSelection.delete(key);
+        else nextSelection.add(key);
+    } else {
+        nextSelection = new Set([key]);
     }
     
-    // If x is in the blank area to the right, clamp to last column
-    if (colIndex === -1 && x >= currentX) colIndex = columns.length - 1;
-    // If x is in the checkbox area (< 50), clamp to first column for cell selection
-    if (colIndex === -1 && x < 50) colIndex = 0;
-
-    if (rowIndex >= 0 && rowIndex < flatData.length && colIndex !== -1) {
-        setIsCellDragging(true);
-        setDragStartCell({ row: rowIndex, col: colIndex });
-
-        const node = flatData[rowIndex];
-        const col = columns[colIndex];
-        const cellKey = `${node.record[rowKey].toString()}_${col.dataIndex}`;
-
-        if (!e.ctrlKey && !e.metaKey) {
-            setSelectedCellKeys(new Set([cellKey]));
-        } else {
-            const newCells = new Set(selectedCellKeys);
-            newCells.add(cellKey);
-            setSelectedCellKeys(newCells);
-        }
-
-        document.body.classList.add("is-dragging");
-    }
+    setSelectedCellKeys(nextSelection);
+    setDragStart({ rowIndex, colIndex: colIdx, baseSelection: (e.ctrlKey || e.metaKey) ? new Set(nextSelection) : new Set() });
+    setIsDragging(true);
   };
 
-  const handleMouseMoveGlobal = (e) => {
-    if (!isCellDragging || !dragStartCell || !bodyRef.current) return;
+  const handleCellMouseEnter = (rowIndex, colIndex) => {
+    if (!isDragging || !dragStart) return;
 
-    const bodyRect = bodyRef.current.getBoundingClientRect();
-    const x = e.clientX - bodyRect.left + bodyRef.current.scrollLeft;
-    const y = e.clientY - bodyRect.top + bodyRef.current.scrollTop;
+    const minRow = Math.min(dragStart.rowIndex, rowIndex);
+    const maxRow = Math.max(dragStart.rowIndex, rowIndex);
+    const minCol = Math.min(dragStart.colIndex, colIndex);
+    const maxCol = Math.max(dragStart.colIndex, colIndex);
 
-    const currRow = Math.max(0, Math.min(flatData.length - 1, Math.floor(y / rowHeight)));
-    
-    let currentX = 50;
-    let currCol = -1;
-    for (let i = 0; i < columns.length; i++) {
-        const w = columnWidths[i] || 120;
-        if (x >= currentX && x < currentX + w) {
-            currCol = i;
-            break;
-        }
-        currentX += w;
-    }
-    // If x is beyond last column, clamp to last column
-    if (currCol === -1 && x >= currentX) currCol = columns.length - 1;
-    // If x is before first column, clamp to 0
-    if (currCol === -1 && x < 50) currCol = 0;
-
-    if (currCol === -1) return;
-
-    const startRow = Math.min(dragStartCell.row, currRow);
-    const endRow = Math.max(dragStartCell.row, currRow);
-    const startCol = Math.min(dragStartCell.col, currCol);
-    const endCol = Math.max(dragStartCell.col, currCol);
-
-    const newKeys = new Set();
-    for (let r = startRow; r <= endRow; r++) {
-      for (let c = startCol; c <= endCol; c++) {
+    const nextSelection = new Set(dragStart.baseSelection);
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
         const node = flatData[r];
         const col = columns[c];
-        if (node && col) {
-          newKeys.add(`${node.record[rowKey].toString()}_${col.dataIndex}`);
-        }
+        if (node && col) nextSelection.add(getCellKey(node.record, col));
       }
     }
-    setSelectedCellKeys(newKeys);
+    setSelectedCellKeys(nextSelection);
   };
 
-  // --- Side Effects ---
   useEffect(() => {
-    const handleMouseUp = () => {
-      if (isCellDragging) {
-        setIsCellDragging(false);
-        setDragStartCell(null);
-        document.body.classList.remove("is-dragging");
-      }
+    const onMouseUp = () => {
+      setIsDragging(false);
+      setDragStart(null);
     };
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mousemove', handleMouseMoveGlobal);
-    return () => {
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('mousemove', handleMouseMoveGlobal);
-    };
-  }, [isCellDragging, dragStartCell, flatData, columns, rowHeight, rowKey]);
-
-  useEffect(() => {
-    const handlePaste = (e) => {
-      if (!enableCellSelection || selectedCellKeys.size === 0) return;
-      const clipboardData = e.clipboardData || window.clipboardData;
-      const pastedText = clipboardData.getData('text');
-      if (!pastedText) return;
-
-      const dataMatrix = pastedText.split(/\r?\n/).filter(row => row.length > 0).map(row => row.split('\t'));
-      let minRow = Infinity, minCol = Infinity;
-      
-      selectedCellKeys.forEach((key) => {
-        const [rKey, dIndex] = key.split('_');
-        const rIdx = flatData.findIndex((n) => n.record[rowKey].toString() === rKey);
-        const cIdx = columns.findIndex((c) => c.dataIndex === dIndex);
-        if (rIdx !== -1 && rIdx < minRow) minRow = rIdx;
-        if (cIdx !== -1 && cIdx < minCol) minCol = cIdx;
-      });
-
-      if (minRow !== Infinity && minCol !== Infinity) {
-        e.preventDefault();
-        onPaste({
-          data: dataMatrix,
-          startRowIndex: minRow,
-          startColIndex: minCol,
-          startRecord: flatData[minRow].record,
-          startColumn: columns[minCol],
-          affectedRows: flatData.slice(minRow, minRow + dataMatrix.length).map(n => n.record),
-        });
-      }
-    };
-
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('paste', handlePaste);
-      return () => container.removeEventListener('paste', handlePaste);
-    }
-  }, [enableCellSelection, selectedCellKeys, flatData, columns, rowKey, onPaste]);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => window.removeEventListener('mouseup', onMouseUp);
+  }, [isDragging]);
 
   useEffect(() => {
     const selectedRows = [];
-    flatData.forEach((node) => {
-      const rKey = node.record[rowKey].toString();
-      const isRowSelected = selectedRowKeys.has(rKey) || 
-        columns.some((col) => {
-          let currentKey = rKey;
-          while (currentKey) {
-            if (selectedCellKeys.has(`${currentKey}_${col.dataIndex}`)) return true;
-            currentKey = parentMap.get(currentKey);
-          }
-          return false;
-        });
-      if (isRowSelected) {
-        selectedRows.push(node.record);
-      }
+    const seen = new Set();
+    flatData.forEach(node => {
+        const rKey = node.record[rowKey].toString();
+        if (columns.some(col => isCellInSelection(rKey, col.dataIndex || col.key))) {
+            if (!seen.has(rKey)) {
+                selectedRows.push(node.record);
+                seen.add(rKey);
+            }
+        }
     });
     onCellSelectionChange(selectedRows, Array.from(selectedCellKeys));
-  }, [selectedCellKeys, selectedRowKeys, flatData, rowKey, columns, parentMap, onCellSelectionChange]);
+  }, [selectedCellKeys, flatData, columns, rowKey, onCellSelectionChange]);
 
-  // --- Render Calculations ---
-  const buffer = 8;
-  const visibleCount = Math.ceil((height - headerHeight) / rowHeight) + buffer;
+  // --- Scroll Logic ---
+  const onScroll = (e) => setScrollTop(e.target.scrollTop);
+
+  // --- Binary Search for Start Index ---
   let startIndex = 0;
-  let currentPos = 0;
-  for (let i = 0; i < flatData.length; i++) {
-    if (currentPos + rowHeight > scrollTop) {
-      startIndex = i;
+  let low = 0, high = rowPositions.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (rowPositions[mid].top <= scrollTop && rowPositions[mid].top + rowPositions[mid].height > scrollTop) {
+      startIndex = mid;
       break;
     }
-    currentPos += rowHeight;
+    if (rowPositions[mid].top > scrollTop) high = mid - 1;
+    else low = mid + 1;
   }
-  const endIndex = Math.min(flatData.length, startIndex + visibleCount);
-  const visibleData = flatData.slice(startIndex, endIndex);
-  const offsetY = startIndex * rowHeight;
 
-  const totalWidth = 50 + columns.reduce((sum, _, idx) => sum + (columnWidths[idx] || 120), 0);
-  const isAllSelected = flatData.length > 0 && flatData.every(n => selectedRowKeys.has(n.record[rowKey].toString()));
+  const viewportHeight = height - headerHeight;
+  let endIndex = startIndex;
+  while (endIndex < rowPositions.length && rowPositions[endIndex].top < scrollTop + viewportHeight) {
+    endIndex++;
+  }
+  endIndex = Math.min(rowPositions.length, endIndex + 4);
+  startIndex = Math.max(0, startIndex - 2);
+
+  const visibleData = flatData.slice(startIndex, endIndex);
+  const offsetY = rowPositions[startIndex] ? rowPositions[startIndex].top : 0;
+  
+  // 总宽度计算，不包括最后一列的弹性部分
+  const fixedTotalWidth = columns.slice(0, -1).reduce((acc, col) => acc + col.width, 0) + 50;
 
   return (
-    <div 
-      className={`v-table-container ${bordered ? 'bordered' : ''}`} 
-      style={{ 
-        height: `${height}px`, 
-        width: typeof width === 'number' ? `${width}px` : width 
-      }}
-      ref={containerRef}
-    >
-      {/* Header */}
-      <div className="v-table-header" style={{ height: `${headerHeight}px` }}>
-        <div className="v-table-row" style={{ height: '100%', borderBottom: 'none', width: `${totalWidth}px` }}>
-          <div className="v-table-cell" style={{ width: '50px', justifyContent: 'center', flex: 'none' }}>
-             <div 
-               className={`v-native-checkbox ${isAllSelected ? 'checked' : ''}`} 
-               onClick={handleSelectAll}
-             ></div>
-          </div>
-          {columns.map((col, idx) => (
-            <div key={idx} className="v-table-cell" style={{ width: `${columnWidths[idx]}px`, flex: 'none' }}>
-              {col.title}
-              <div 
-                className="v-resizer" 
-                onMouseDown={(e) => handleResizerMouseDown(e, idx)}
-              ></div>
-            </div>
-          ))}
+    <div className={`v-table-container ${bordered ? 'bordered' : ''}`} style={{ height: `${height}px`, width: '100%' }} ref={containerRef}>
+      <div className="v-table-header" style={{ height: `${headerHeight}px`, overflow: 'hidden' }}>
+        <div className="v-table-header-inner" style={{ minWidth: '100%', display: 'flex' }}>
+            <div className="v-table-header-cell" style={{ width: '50px', flex: 'none', justifyContent: 'center' }}>#</div>
+            {columns.map((col, idx) => {
+                const isLast = idx === columns.length - 1;
+                return (
+                    <div 
+                        key={idx} 
+                        className="v-table-header-cell" 
+                        style={{ 
+                            width: isLast ? 'auto' : `${col.width}px`, 
+                            flex: isLast ? 1 : 'none',
+                            minWidth: isLast ? `${col.width}px` : undefined 
+                        }}
+                    >
+                        {col.title}
+                    </div>
+                );
+            })}
         </div>
       </div>
 
-      {/* Body */}
-      <div 
-        className="v-table-body" 
-        style={{ height: `${height - headerHeight}px` }}
-        onScroll={onScroll}
-        onMouseDown={handleMouseDown}
-        ref={bodyRef}
-      >
-        <div className="v-table-spacer" style={{ height: `${totalHeight}px` }}></div>
-        <div className="v-table-content" style={{ transform: `translateY(${offsetY}px)`, width: `${totalWidth}px` }}>
-          {visibleData.map((node, loopIdx) => {
-            const absRowIdx = startIndex + loopIdx;
+      <div className="v-table-body" style={{ height: `${height - headerHeight}px`, overflow: 'auto' }} onScroll={onScroll} ref={bodyRef}>
+        <div className="v-table-spacer" style={{ height: `${totalHeight}px`, pointerEvents: 'none' }}></div>
+        <div className="v-table-content" style={{ transform: `translateY(${offsetY}px)`, minWidth: '100%' }}>
+          {visibleData.map((node, index) => {
+            const absoluteIndex = startIndex + index;
             const rKey = node.record[rowKey].toString();
-            const isRowChecked = selectedRowKeys.has(rKey);
-            const isHovered = hoveredKey === rKey;
-            
-            const isRowHasSelectedCell = columns.some((col) => isCellInSelection(rKey, col.dataIndex));
-            const rowZIndex = isRowHasSelectedCell ? (1000 - absRowIdx) : 1;
+            const pos = rowPositions[absoluteIndex];
+            const isRowHasSelected = columns.some(c => isCellInSelection(rKey, c.dataIndex || c.key));
+            const rowClass = typeof rowClassName === 'function' ? rowClassName(node.record, absoluteIndex) : rowClassName;
 
             return (
               <div 
-                key={rKey}
-                className={`v-table-row ${isHovered ? "hovered" : ""} ${isRowChecked ? "row-checked" : ""}`}
-                style={{ height: `${rowHeight}px`, width: `${totalWidth}px`, zIndex: rowZIndex, position: 'relative' }}
+                key={rKey} 
+                className={`v-table-row ${hoveredKey === rKey ? 'hovered' : ''} ${rowClass || ''}`}
+                style={{ height: `${pos.height}px`, zIndex: isRowHasSelected ? 5 : 1, position: 'relative', display: 'flex' }}
                 onMouseEnter={() => setHoveredKey(rKey)}
                 onMouseLeave={() => setHoveredKey(null)}
               >
-                <div className="v-table-cell" style={{ width: '50px', justifyContent: 'center', flex: 'none' }}>
-                  <div 
-                    className={`v-native-checkbox ${isRowChecked ? "checked" : ""}`}
-                    onClick={(e) => handleSelectRow(e, rKey)}
-                  ></div>
+                <div className="v-table-cell" style={{ width: '50px', flex: 'none', justifyContent: 'center' }}>
+                   {absoluteIndex + 1}
                 </div>
-
                 {columns.map((col, colIdx) => {
-                  const width = columnWidths[colIdx];
-                  const dIndex = col.dataIndex;
-                  const isCellSelected = isCellInSelection(rKey, dIndex);
+                  const isLast = colIdx === columns.length - 1;
+                  const dataIdx = col.dataIndex || col.key;
+                  const isSelected = isCellInSelection(rKey, dataIdx);
+                  const content = col.render ? col.render(node.record[dataIdx], node.record, absoluteIndex) : node.record[dataIdx];
                   
-                  let dynamicBorderStyle = {};
-                  if (enableCellSelection && isCellSelected) {
-                    const prevRowRecord = flatData[absRowIdx - 1]?.record;
-                    const nextRowRecord = flatData[absRowIdx + 1]?.record;
-                    const prevColDef = columns[colIdx - 1];
-                    const nextColDef = columns[colIdx + 1];
+                  let selectionStyle = {};
+                  if (isSelected) {
+                    const borders = [];
+                    const prevRecord = flatData[absoluteIndex - 1]?.record;
+                    const nextRecord = flatData[absoluteIndex + 1]?.record;
+                    const prevCol = columns[colIdx - 1];
+                    const nextCol = columns[colIdx + 1];
 
-                    const isTopEdge = !prevRowRecord || !isCellInSelection(prevRowRecord[rowKey], dIndex);
-                    const isBottomEdge = !nextRowRecord || !isCellInSelection(nextRowRecord[rowKey], dIndex);
-                    const isLeftEdge = !prevColDef || !isCellInSelection(rKey, prevColDef.dataIndex);
-                    const isRightEdge = !nextColDef || !isCellInSelection(rKey, nextColDef.dataIndex);
+                    const isTopEdge    = !prevRecord || !isCellInSelection(prevRecord[rowKey], dataIdx);
+                    const isBottomEdge = !nextRecord || !isCellInSelection(nextRecord[rowKey], dataIdx);
+                    const isLeftEdge   = !prevCol    || !isCellInSelection(rKey, prevCol.dataIndex || prevCol.key);
+                    const isRightEdge  = !nextCol    || !isCellInSelection(rKey, nextCol.dataIndex || nextCol.key);
 
-                    dynamicBorderStyle = {
-                      '--v_bw_t': isTopEdge ? "2px" : "0",
-                      '--v_bw_r': isRightEdge ? "2px" : "0",
-                      '--v_bw_b': isBottomEdge ? "2px" : "0",
-                      '--v_bw_l': isLeftEdge ? "2px" : "0",
+                    // 全部使用 inset box-shadow：
+                    // 1. inset 渲染在 border 之上，天然优先于表格本身的格线
+                    // 2. 不修改任何 borderColor，内部格线保持原始灰色完整
+                    if (isTopEdge)    borders.push('inset 0 2px 0 0 #1890ff');
+                    if (isBottomEdge) borders.push('inset 0 -2px 0 0 #1890ff');
+                    if (isLeftEdge)   borders.push('inset 2px 0 0 0 #1890ff');
+                    if (isRightEdge)  borders.push('inset -2px 0 0 0 #1890ff');
+
+                    selectionStyle = {
+                      boxShadow: borders.join(', '),
+                      backgroundColor: '#e6f7ff',
+                      zIndex: 10
                     };
-                    
-                    if (!isRightEdge) dynamicBorderStyle.borderRightColor = 'transparent';
-                    if (!isBottomEdge) dynamicBorderStyle.borderBottomColor = 'transparent';
                   }
-
-                  let content = col.render ? col.render(node.record[dIndex], node.record) : node.record[dIndex];
-                  let icon = null;
-                  if (colIdx === iconIndex) {
-                    if (node.record[childrenKey]?.length > 0) {
-                      const isExpanded = expandedKeys.has(rKey);
-                      icon = (
-                        <span className={`v-tree-icon ${isExpanded ? "expanded" : ""}`} 
-                              style={{ marginLeft: `${node.level * 20}px` }}
-                              onClick={(e) => handleExpand(e, rKey)}>
-                          <svg viewBox="0 0 1024 1024"><path d="M840.4 300H183.6c-19.7 0-30.7 20.8-18.5 35l328.4 380.8c9.4 10.9 27.5 10.9 37 0L858.9 335c12.2-14.2 1.2-35-18.5-35z"></path></svg>
-                        </span>
-                      );
-                    } else {
-                      icon = <span style={{ display: 'inline-block', width: '28px', marginLeft: `${node.level * 20}px` }}></span>;
-                    }
-                  }
-
-                  const tooltip = typeof content === 'string' ? content.replace(/<[^>]+>/g, '') : undefined;
 
                   return (
                     <div 
-                      key={dIndex}
-                      className={`v-table-cell ${isCellSelected ? "selected" : ""}`}
-                      style={{ width: `${width}px`, flex: 'none', ...dynamicBorderStyle }}
-                      title={tooltip}
+                      key={dataIdx} 
+                      className={`v-table-cell ${isSelected ? 'selected' : ''}`}
+                      style={{ 
+                        width: isLast ? 'auto' : `${col.width}px`, 
+                        flex: isLast ? 1 : 'none', 
+                        minWidth: isLast ? `${col.width}px` : undefined,
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        ...selectionStyle 
+                      }}
+                      onMouseDown={(e) => handleCellMouseDown(e, node.record, col, absoluteIndex, colIdx)}
+                      onMouseEnter={() => handleCellMouseEnter(absoluteIndex, colIdx)}
                     >
-                      {icon}
-                      {typeof content === 'string' && content.includes('<') ? (
-                        <span className="v-cell-text" dangerouslySetInnerHTML={{ __html: content }}></span>
-                      ) : (
-                        <span className="v-cell-text">{content}</span>
+                      {/* Tree Icon Support */}
+                      {colIdx === iconIndex && node.record[childrenKey] && node.record[childrenKey].length > 0 && (
+                        <span 
+                          className={`v-tree-icon ${expandedKeys.has(node.record[rowKey]) ? 'expanded' : ''}`}
+                          style={{ marginLeft: `${node.level * 16}px` }}
+                          onClick={(e) => handleExpand(e, node.record[rowKey])}
+                        >
+                          <svg viewBox="0 0 1024 1024"><path d="M765.7 486.8L314.9 134.7c-5.3-4.1-12.9-0.4-12.9 6.3v714c0 6.7 7.7 10.4 12.9 6.3l450.8-352.1c3.9-3.1 3.9-9.1 0-12.4z"></path></svg>
+                        </span>
                       )}
+                      {colIdx === iconIndex && (!node.record[childrenKey] || node.record[childrenKey].length === 0) && (
+                        <span style={{ marginLeft: `${node.level * 16 + 24}px` }} />
+                      )}
+
+                      <div className="v-cell-content" style={{ overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', pointerEvents: 'none' }}>
+                        {typeof content === 'string' && content.includes('<') ? (
+                          <span dangerouslySetInnerHTML={{ __html: content }}></span>
+                        ) : (
+                          <span>{content}</span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -489,9 +296,9 @@ const VirtualTreeTable = ({
           })}
         </div>
       </div>
+      {children}
     </div>
   );
 };
 
 export default VirtualTreeTable;
-
