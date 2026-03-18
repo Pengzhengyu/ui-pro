@@ -1,0 +1,82 @@
+@keyframes scan {
+  0% { top: 0; opacity: 0; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.8; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.02); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 0.3; }
+}
+
+.cyber-scanner-root {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+
+.scanner-container {
+  position: relative;
+}
+
+.scanner-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #22d3ee, transparent);
+  box-shadow: 0 0 15px #22d3ee;
+  z-index: 10;
+  pointer-events: none;
+  animation: scan 4s linear infinite;
+  display: none;
+}
+
+.cyber-scanner-root.active .scanner-line {
+  display: block;
+}
+
+.scanner-corners .corner {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #22d3ee;
+  z-index: 11;
+  opacity: 0.6;
+}
+
+.corner.top-left { top: -5px; left: -5px; border-right: none; border-bottom: none; }
+.corner.top-right { top: -5px; right: -5px; border-left: none; border-bottom: none; }
+.corner.bottom-left { bottom: -5px; left: -5px; border-right: none; border-top: none; }
+.corner.bottom-right { bottom: -5px; right: -5px; border-left: none; border-top: none; }
+
+.scanner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(34, 211, 238, 0.05) 0px,
+    rgba(34, 211, 238, 0.05) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 9;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.cyber-scanner-root:hover .scanner-overlay {
+  opacity: 1;
+}
+
+.cyber-scanner-root:hover .scanner-corners .corner {
+  animation: pulse 1s ease-in-out infinite;
+  opacity: 1;
+}

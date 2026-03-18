@@ -1,0 +1,215 @@
+/* d:\code\virtual-table-demo\src\commons\VirtualTreeTable\VirtualTreeTable.css */
+:root {
+  --v-table-primary: #1890ff;
+  --v-table-border: #e8e8e8;
+  --v-table-header-bg: #fafafa;
+  --v-table-hover-bg: #e6f7ff;
+  --v-table-selected-bg: rgba(24, 144, 255, 0.08);
+  --v-table-text: #262626;
+  --v-table-text-secondary: #8c8c8c;
+}
+
+.v-table-container {
+  position: relative;
+  border: 1px solid var(--v-table-border);
+  background: #fff;
+  overflow: hidden;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  color: var(--v-table-text);
+  border-radius: 4px;
+}
+
+.v-table-header {
+  background: var(--v-table-header-bg);
+  border-bottom: 1px solid var(--v-table-border);
+  overflow: hidden;
+  position: relative;
+  font-weight: 600;
+  z-index: 10;
+}
+
+.v-table-header .v-table-row {
+  background: transparent;
+}
+
+.v-table-body {
+  overflow: auto;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 transparent;
+  background: #fff;
+}
+
+.v-table-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.v-table-body::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 4px;
+}
+
+.v-table-spacer {
+  pointer-events: none;
+}
+
+.v-table-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content; /* 确保最小宽度能撑起 totalWidth */
+}
+
+.v-table-row {
+  display: flex;
+  background: #fff;
+  transition: background 0.15s ease;
+  align-items: stretch;
+  overflow: visible;
+}
+
+.v-table-row:last-child {
+  border-bottom: none;
+}
+
+.v-table-row.hovered {
+  background: var(--v-table-hover-bg);
+}
+
+.v-table-row.row-checked {
+  background: transparent;
+}
+
+.v-table-cell {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid var(--v-table-border);
+  border-bottom: 1px solid var(--v-table-border);
+  white-space: nowrap;
+  overflow: visible; 
+  position: relative;
+  box-sizing: border-box;
+  z-index: 1;
+  flex: none; /* 关键：禁止 flex 自动伸缩，确保列宽绝对精准 */
+}
+
+.v-table-cell:last-child {
+  border-right: none;
+}
+
+.v-table-cell.selected {
+  background: var(--v-table-selected-bg);
+  z-index: 2;
+}
+
+/* 构建选区大边框 */
+.v-table-cell.selected::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  pointer-events: none;
+  z-index: 10;
+  display: block;
+  visibility: visible;
+  border-style: solid;
+  border-color: var(--v-table-primary);
+  /* 使用 JS 传入的变量控制边框宽度 */
+  border-width: var(--v_bw_t, 0) var(--v_bw_r, 0) var(--v_bw_b, 0) var(--v_bw_l, 0);
+}
+
+/* 树形图标 */
+.v-tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin-right: 8px;
+  color: var(--v-table-text-secondary);
+  transition: all 0.2s ease;
+  border-radius: 4px;
+}
+
+.v-tree-icon:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--v-table-primary);
+}
+
+.v-tree-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  transform: rotate(-90deg);
+  transition: transform 0.2s ease;
+}
+
+.v-tree-icon.expanded svg {
+  transform: rotate(0deg);
+}
+
+.v-cell-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 复选框 */
+.v-native-checkbox {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.v-native-checkbox:hover {
+  border-color: var(--v-table-primary);
+}
+
+.v-native-checkbox.checked {
+  background: var(--v-table-primary);
+  border-color: var(--v-table-primary);
+}
+
+.v-native-checkbox.checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+
+body.is-dragging {
+  cursor: crosshair !important;
+}
+
+.v-resizer {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 11;
+  transition: background 0.2s;
+}
+
+.v-resizer:hover {
+  background: var(--v-table-primary);
+}

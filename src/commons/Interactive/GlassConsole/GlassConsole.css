@@ -1,0 +1,106 @@
+.glass-console {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 25px;
+  width: 100%;
+  max-width: 450px;
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.console-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.console-led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: pulse-led 2s infinite;
+}
+
+.console-label {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #94a3b8;
+}
+
+.console-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.console-btn-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  cursor: pointer;
+  padding: 6px;
+  box-shadow: 
+    8px 8px 16px rgba(0, 0, 0, 0.3),
+    -4px -4px 12px rgba(255, 255, 255, 0.02);
+  transition: all 0.2s ease;
+}
+
+.console-btn-wrap.pressed {
+  box-shadow: 
+    inset 4px 4px 8px rgba(0, 0, 0, 0.4),
+    inset -2px -2px 6px rgba(255, 255, 255, 0.01);
+  transform: scale(0.97);
+}
+
+.console-btn-inner {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(51, 65, 85, 0.4), rgba(15, 23, 42, 0.6));
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.btn-indicator {
+  width: 24px;
+  height: 4px;
+  background: #334155;
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+
+.console-btn-wrap.is-active .btn-indicator {
+  background: var(--btn-color);
+  box-shadow: 0 0 12px var(--btn-color);
+}
+
+.btn-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.console-btn-wrap.is-active .btn-label {
+  color: #f1f5f9;
+}
+
+@keyframes pulse-led {
+  0%, 100% { opacity: 1; box-shadow: 0 0 10px #10b981; }
+  50% { opacity: 0.4; box-shadow: 0 0 4px #10b981; }
+}
